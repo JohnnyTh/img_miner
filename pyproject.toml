@@ -1,0 +1,63 @@
+[tool.poetry]
+name = "img-miner"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "~3.10"
+loguru = ">=0.6.0,<1.0.0"
+bs4 = "~0.0.1"
+requests = "~2.31"
+pydantic = "~2.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = ">=23.0.0"
+isort = ">=5.0.0"
+mypy = ">=1.5.0"
+pre-commit = ">=3.0.0"
+ruff = ">=0.0.280"
+twine = ">=4.0.0"
+
+[tool.poetry.group.tests]
+optional = true
+
+[tool.poetry.group.tests.dependencies]
+coverage = ">=7.0.0"
+pytest = ">=7.0.0"
+pytest-cov = ">=4.0.0"
+pytest-loguru = ">=0.2.0"
+pytest-mock = ">=3.0.0"
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310"]
+
+[tool.coverage.run]
+omit = []
+source = ["img_miner"]
+
+[tool.isort]
+profile = "black"
+known_local_folder = []
+
+[tool.mypy]
+disallow_untyped_defs = true
+exclude = "^tests/*"
+ignore_missing_imports = true
+strict_optional = true
+
+[tool.ruff]
+line-length = 100
+select = ["A", "B", "C", "E", "F", "N", "W"]
+
+[tool.ruff.pep8-naming]
+classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]

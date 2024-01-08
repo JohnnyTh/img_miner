@@ -1,0 +1,15 @@
+[general]
+ignore = body-is-missing
+regex-style-search = true
+
+[author-valid-email]
+regex = [^@]+@toshibagcs.com
+
+[body-max-line-length]
+line-length=120
+
+[title-min-length]
+min-length = 10
+
+[title-max-length]
+line-length = 100
