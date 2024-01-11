@@ -3,7 +3,7 @@ import typing
 
 import pydantic
 
-__all__ = ["ArtefactInfo"]
+__all__ = ["ArtefactInfo", "ProgressTracker"]
 
 
 class ArtefactInfo(pydantic.BaseModel):
@@ -18,3 +18,8 @@ class ArtefactInfo(pydantic.BaseModel):
         if isinstance(value, str):
             return pathlib.Path(value)
         return value
+
+
+class ProgressTracker(pydantic.BaseModel):
+    n_processed: int = 0
+    n_successful: int = 0
