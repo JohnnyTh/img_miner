@@ -20,7 +20,7 @@ class ImgMiner:
         self,
         web_addr_base: str,
         save_dir: pathlib.Path,
-        n_threads: int = 8,
+        n_threads: int = 2,
         save_progress_every_iters: int = 1000,
         image_batch_size: int = 1000,
         images_limit: int = int(10e6),
@@ -158,6 +158,11 @@ class ImgMiner:
 
                 if self.progress.n_processed % self.save_progress_every_iters == 0:
                     self._save_progress()
+
+                if self.progress.n_processed >= self.images_limit:
+                    logger.info(f"Reached image limit: {self.images_limit}, exiting")
+                    self._save_progress()
+                    running = False
 
 
 def main() -> None:
