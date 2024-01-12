@@ -21,5 +21,8 @@ class ArtefactInfo(pydantic.BaseModel):
 
 
 class ProgressTracker(pydantic.BaseModel):
+    batch_id: int = 0
     n_processed: int = 0
     n_successful: int = 0
+    generator_type: str = "undefined"
+    random_seed: typing.Optional[int] = None

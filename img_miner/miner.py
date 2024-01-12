@@ -1,39 +1,18 @@
-import json
 import pathlib
+import signal
+import sys
+import types
 import typing
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 from data_structures import ArtefactInfo, ProgressTracker
+from joblib import Parallel, delayed
 from loguru import logger
 from name_generators import ImgIdGeneratorRandom
 
-
-def download_file(url: str, local_p: pathlib.Path) -> bool:
-    response = requests.get(url)
-
-    success = False
-    if response.status_code == 200:
-        logger.debug(f"Save file to {local_p}")
-        with open(local_p, "wb") as file:
-            file.write(response.content)
-        success = True
-    else:
-        logger.warning(f"Failed to download url={url}. Status code: {response.status_code}")
-
-    return success
-
-
-def read_json(path: pathlib.Path) -> typing.Dict[typing.Any, typing.Any]:
-    with open(path, "r") as file:
-        data = json.load(file)
-    return data
-
-
-def write_json(json_: typing.Dict[typing.Any, typing.Any], path: pathlib.Path) -> None:
-    with open(path, "w") as file:
-        json.dump(json_, file)
+from img_miner.filesystem import read_json, write_json
 
 
 class ImgMiner:
@@ -43,14 +22,23 @@ class ImgMiner:
         save_dir: pathlib.Path,
         n_threads: int = 8,
         save_progress_every_iters: int = 1000,
+        image_batch_size: int = 1000,
+        images_limit: int = int(10e6),
     ) -> None:
         self.web_addr_base = web_addr_base
         self.n_threads = n_threads
         self.save_progress_every_iters = save_progress_every_iters
+        self.image_batch_size = image_batch_size
+        self.images_limit = images_limit
 
         self.img_dir = save_dir / "images"
         self.progress_tracker_p = save_dir / "progress_tracker.json"
+
         self.progress = self._restore_progress()
+        self.generator = ImgIdGeneratorRandom(generate_from_idx=self.progress.n_processed + 1)
+
+        self.progress.random_seed = getattr(self.generator, "seed", None)
+        self.progress.generator_type = self.generator.__class__.__name__
 
         if not self.img_dir.exists():
             self.img_dir.mkdir(parents=True)
@@ -61,7 +49,9 @@ class ImgMiner:
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
             )
         }
-        self.gen = ImgIdGeneratorRandom(generate_from_idx=self.progress.n_processed)
+
+        signal.signal(signal.SIGTERM, self._handle_stop_signal)
+        signal.signal(signal.SIGINT, self._handle_stop_signal)
 
     def _save_progress(self) -> None:
         logger.info(f"Saving mining progress to {self.progress_tracker_p}")
@@ -73,6 +63,7 @@ class ImgMiner:
             progress = ProgressTracker(**read_json(self.progress_tracker_p))
             logger.info(f"Restored: {progress}")
         else:
+            logger.info("Initializing new mining progress tracker")
             progress = ProgressTracker()
         return progress
 
@@ -83,12 +74,25 @@ class ImgMiner:
 
         write_json(info.model_dump(mode="json"), metadata_p)
 
-    def _mine(self, index_download: int) -> bool:
+    @staticmethod
+    def _download_file(url: str, local_p: pathlib.Path) -> bool:
+        response = requests.get(url)
+
+        success = False
+        if response.status_code == 200:
+            logger.debug(f"Save file to {local_p}")
+            with open(local_p, "wb") as file:
+                file.write(response.content)
+            success = True
+        else:
+            logger.warning(f"Failed to download url={url}. Status code: {response.status_code}")
+
+        return success
+
+    def _mine(self, image_index: int, id_img: str, save_dir: pathlib.Path) -> bool:
         success = False
         img_p_local = None
         url_img_hosting = None
-
-        id_img = next(self.gen)
 
         url_img = urljoin(self.web_addr_base, id_img)
 
@@ -101,10 +105,10 @@ class ImgMiner:
             url_img_hosting = element.attrs["src"]
 
             img_extension = pathlib.Path(url_img_hosting).suffix
-            img_p_local = self.img_dir / f"{str(index_download).zfill(4)}{img_extension}"
+            img_p_local = save_dir / f"{str(image_index).zfill(4)}{img_extension}"
 
             try:
-                success = download_file(url_img_hosting, img_p_local)
+                success = self._download_file(url_img_hosting, img_p_local)
             except Exception as err:
                 logger.error(f"{err}")
 
@@ -112,28 +116,48 @@ class ImgMiner:
             local_p=img_p_local,
             url_primary=url_img,
             url_hosting=url_img_hosting,
-            index_download=index_download,
+            index_download=image_index,
             success_download=success,
         )
-        self._save_image_metadata(img_info, self.img_dir)
+        self._save_image_metadata(img_info, save_dir)
 
         return success
+
+    def _handle_stop_signal(
+        self, signum: int, frame: typing.Optional[types.FrameType] = None
+    ) -> None:
+        logger.info(f"Received signal {signum}. Stopping miner")
+        self._save_progress()
+        sys.exit(0)
 
     def mine(self) -> None:
         running = True
 
-        n_mined = 0
-        n_processed = 0
-        while running:
-            logger.info(f"Extracting image: {n_processed}. Extracted with success: {n_mined}")
-            success = self._mine(n_processed)
+        with Parallel(n_jobs=self.n_threads, backend="threading") as parallel:
+            while running:
+                img_ids_batch = self.generator.generate_n_ids(self.image_batch_size)
+                save_dir = self.img_dir / f"batch_{str(self.progress.batch_id).zfill(10)}"
+                if not save_dir.exists():
+                    save_dir.mkdir()
 
-            if success:
-                n_mined += 1
+                logger.info(
+                    f"Extracting batch to dir: {save_dir}. "
+                    f"Stats: total_images_processed={self.progress.n_processed}. "
+                    f" total_image_success={self.progress.n_successful}"
+                )
+                delayed_jobs = []
+                for image_index_batch, image_id in enumerate(img_ids_batch):
+                    delayed_jobs.append(delayed(self._mine)(image_index_batch, image_id, save_dir))
 
-            n_processed += 1
-            if n_processed % self.save_progress_every_iters == 0:
-                self._save_progress()
+                success_batch = list(parallel(delayed_jobs))
+
+                self.progress.n_successful += success_batch.count(True)
+
+                self.progress.n_processed += len(img_ids_batch)
+                self.progress.batch_id += 1
+
+                if self.progress.n_processed % self.save_progress_every_iters == 0:
+                    self._save_progress()
 
 
 def main() -> None:

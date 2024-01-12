@@ -51,8 +51,11 @@ class ImgIdGeneratorRandom(ImgIdGenerator):
         seed: int = 42,
     ):
         super().__init__(first_char, generate_from_idx, n_chars_total)
-        logger.debug(f"Set random seed to: {seed}")
-        random.seed(seed)
+        self.seed = seed
+
+        logger.debug(f"Set random seed to: {self.seed}")
+        random.seed(self.seed)
+
         for _ in range(self.generate_from_idx):
             _ = self._generate()
 
