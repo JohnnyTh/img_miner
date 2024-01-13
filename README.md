@@ -17,5 +17,9 @@ python img_miner/miner.py
 2. Run using a docker container:
 
 ```bash
-
+docker run -d \
+ --name image-miner \
+ -v "${PWD}:/mounted" \
+ docker.io/library/image_miner:arm64-latest \
+   image-miner --save_dir /mounted/mined_images
 ```
