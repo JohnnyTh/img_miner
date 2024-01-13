@@ -12,6 +12,7 @@ from loguru import logger
 
 from img_miner.data_structures import ArtefactInfo, ProgressTracker
 from img_miner.filesystem import read_json, write_json
+from img_miner.http_connection import HTTPConnection
 from img_miner.name_generators import ImgIdGeneratorRandom
 
 __all__ = ["ImgMiner"]
@@ -45,12 +46,16 @@ class ImgMiner:
         if not self.img_dir.exists():
             self.img_dir.mkdir(parents=True)
 
-        self.headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-            )
-        }
+        self.connection = HTTPConnection(
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+                )
+            },
+            retries_total=25,
+            backoff_factor_seconds=10,
+        )
 
         signal.signal(signal.SIGTERM, self._handle_stop_signal)
         signal.signal(signal.SIGINT, self._handle_stop_signal)
@@ -98,9 +103,9 @@ class ImgMiner:
 
         url_img = urljoin(self.web_addr_base, id_img)
 
-        response = requests.get(url_img, allow_redirects=True, headers=self.headers)
+        response = self.connection.make_request(url_img)
 
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             # Parse the HTML content using BeautifulSoup
             soup = BeautifulSoup(response.content, "html.parser")
             element = soup.findAll("img", {"class": "no-click screenshot-image"})[0]

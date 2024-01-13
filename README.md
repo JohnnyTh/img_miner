@@ -21,5 +21,5 @@ docker run -d \
  --name image-miner \
  -v "${PWD}:/mounted" \
  docker.io/library/image_miner:arm64-latest \
-   image-miner --save_dir /mounted/mined_images
+   image-miner --save_dir /mounted/mined_data
 ```
