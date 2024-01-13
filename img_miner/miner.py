@@ -7,12 +7,14 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
-from data_structures import ArtefactInfo, ProgressTracker
 from joblib import Parallel, delayed
 from loguru import logger
-from name_generators import ImgIdGeneratorRandom
 
+from img_miner.data_structures import ArtefactInfo, ProgressTracker
 from img_miner.filesystem import read_json, write_json
+from img_miner.name_generators import ImgIdGeneratorRandom
+
+__all__ = ["ImgMiner"]
 
 
 class ImgMiner:
@@ -163,15 +165,3 @@ class ImgMiner:
                     logger.info(f"Reached image limit: {self.images_limit}, exiting")
                     self._save_progress()
                     running = False
-
-
-def main() -> None:
-    save_dir = pathlib.Path("data3")
-    addr = "https://prnt.sc/"
-
-    miner = ImgMiner(web_addr_base=addr, save_dir=save_dir)
-    miner.mine()
-
-
-if __name__ == "__main__":
-    main()
