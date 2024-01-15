@@ -10,10 +10,10 @@ from bs4 import BeautifulSoup
 from joblib import Parallel, delayed
 from loguru import logger
 
-from img_miner.data_structures import ArtefactInfo, ProgressTracker
 from img_miner.filesystem import read_json, write_json
 from img_miner.http_connection import HTTPConnection
 from img_miner.name_generators import ImgIdGeneratorRandom
+from img_miner.schemas import ArtefactInfo, ProgressTracker
 
 __all__ = ["ImgMiner"]
 
